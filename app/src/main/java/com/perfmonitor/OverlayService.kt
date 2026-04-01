@@ -37,6 +37,8 @@ class OverlayService : Service() {
     private lateinit var overlayView: View
     private lateinit var tvFps: TextView
     private lateinit var tvCpu: TextView
+    private lateinit var tvCpuLoad: TextView
+    private lateinit var tvTemp: TextView
     private lateinit var tvDdr: TextView
 
     private val fpsMonitor = FpsMonitor()
@@ -122,6 +124,24 @@ class OverlayService : Service() {
         }
         container.addView(tvCpu)
 
+        // CPU Load
+        tvCpuLoad = TextView(this).apply {
+            text = "Load: --"
+            setTextColor(Color.parseColor("#E0E0E0"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = Typeface.MONOSPACE
+        }
+        container.addView(tvCpuLoad)
+
+        // Temperature
+        tvTemp = TextView(this).apply {
+            text = "Temp: --"
+            setTextColor(Color.parseColor("#FF7043"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = Typeface.MONOSPACE
+        }
+        container.addView(tvTemp)
+
         // DDR
         tvDdr = TextView(this).apply {
             text = "DDR: --"
@@ -196,12 +216,40 @@ class OverlayService : Service() {
         tvFps.text = "FPS: $fps"
         tvFps.setTextColor(Color.parseColor(fpsColor))
 
-        // CPU - read in background to avoid blocking UI
+        // Read system info in background to avoid blocking UI
         Thread {
             val cpuText = CpuFreqReader.readClusterFreqs()
             val ddrText = DdrFreqReader.readFormatted()
+
+            // CPU Load
+            val (totalLoad, coreLoads) = CpuLoadReader.readCpuLoad()
+            val loadColor = when {
+                totalLoad >= 80 -> "#FF5252"   // Red - high
+                totalLoad >= 50 -> "#FFD740"   // Yellow - medium
+                else -> "#76FF03"              // Green - low
+            }
+            val loadText = "Load: ${totalLoad}%"
+
+            // Temperature
+            val cpuTemp = TempReader.readCpuTemp()
+            val tempColor = when {
+                cpuTemp >= 80f -> "#FF5252"    // Red - hot
+                cpuTemp >= 60f -> "#FFD740"    // Yellow - warm
+                cpuTemp > 0f -> "#76FF03"      // Green - cool
+                else -> "#90A4AE"              // Gray - N/A
+            }
+            val tempText = if (cpuTemp > 0f) {
+                String.format("Temp: %.0f°C", cpuTemp)
+            } else {
+                "Temp: N/A"
+            }
+
             handler.post {
                 tvCpu.text = "CPU: $cpuText"
+                tvCpuLoad.text = loadText
+                tvCpuLoad.setTextColor(Color.parseColor(loadColor))
+                tvTemp.text = tempText
+                tvTemp.setTextColor(Color.parseColor(tempColor))
                 tvDdr.text = "DDR: $ddrText"
             }
         }.start()
